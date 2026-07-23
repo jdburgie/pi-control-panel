@@ -1,0 +1,13 @@
+[Unit]
+Description=Analog clock on Waveshare 1.47 SPI LCD
+After=multi-user.target
+
+[Service]
+Type=simple
+User=pi
+ExecStart=/home/pi/lcd-clock/venv/bin/python3 /home/pi/lcd-clock/clock.py
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

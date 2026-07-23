@@ -1,0 +1,12 @@
+# secrets — never commit the power-control credential hash
+pi-monitor/power_auth
+
+# python
+__pycache__/
+*.py[cod]
+venv/
+.venv/
+
+# os
+.DS_Store
+Thumbs.db
