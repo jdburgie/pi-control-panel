@@ -1,41 +1,66 @@
-# Pi Zero W Display Hub — JOURNAL
+# Pi Control Panel — JOURNAL
 
 Raspberry Pi Zero W v1.1, hostname **RasPi0W**, `192.168.12.57` (user `pi`).
-Two jobs running as systemd services: an **analog clock** on a small SPI LCD, and a
-**LAN monitoring web dashboard** that also relays backyard weather.
+Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, a
+**LAN monitoring web dashboard** (also on the PiTouch / Pi 5 at `.55`), and an
+**animated Nextion demo** on a 4.3" serial HMI. Repo: `pi-control-panel`.
 
 ---
 
-## ▶ PICK UP HERE (2026-07-23)
+## Session log
 
-Everything below is deployed and running as enabled systemd services (survive reboot).
+### 2026-07-23 — Nextion bring-up, animated demo, repo created
+- **Nextion NX4827T043_011R** (4.3" 480×272 resistive) brought up on the Pi UART
+  (`/dev/serial0`, **9600 baud**). Long debug — root cause was a **floating GND** (wrong pin)
+  plus the board not answering serial while blank/in "SD Card Update" mode. Pi UART proven
+  via loopback (pin 8↔10). With a project loaded and GND fixed → `comok` handshake:
+  `comok 1,67,NX4827T043_011R,0,11,...,16777216`.
+- Wrote `nextion/` tools: `nextion_probe.py` (baud sweep + connect handshake),
+  `nextion_loopback.py`, `nextion_cls.py`, `nextion_baudsweep.py`, `nextion_demo.py`
+  (static shapes), and **`nextion_demo_clock.py`** — animated 7-segment clock (digits drawn
+  from rectangles, no font needed) + intended bouncing ball + touch 24H/12H toggle. Running
+  as `nextion-demo.service`. **Clock + title bar render great**; see Known issues for the
+  ball + touch.
+- **pi-monitor**: added auth-gated **Reboot/Shutdown** (`POST /api/power`, PBKDF2 hash in
+  `power_auth`, scoped sudoers), dynamic hostname title, and cloned the identical dashboard
+  to the **PiTouch (.55)** with the LCD-clock card auto-hidden.
+- Fixed the SSH key ACL on Windows (owner-only) and disabled WiFi powersave on both Pis.
+- **Created this git repo** (`pi-control-panel`) and pulled all running files into it.
 
-- **Clock:** `lcd-clock.service` → `/home/pi/lcd-clock/clock.py` (venv). Landscape analog
-  clock on the Waveshare 1.47" SPI LCD. Working, un-mirrored, upright.
-- **Monitor:** `pi-monitor.service` → `/home/pi/pi-monitor/server.py` (stdlib only).
-  Dashboard at **http://192.168.12.57:8080**. Three Oak Woods branded. Shows Pi health,
-  a Backyard Station section (from the e-paper display at .50), and **Reboot/Shutdown**
-  buttons behind a login.
-- **Sibling:** the **PiTouch** (Raspberry Pi 5) at **192.168.12.55** runs the *same*
-  `server.py` (dashboard at http://192.168.12.55:8080). One codebase, two hosts — see the
-  "PiTouch sibling" section.
+### Known issues (this session)
+- **Nextion touch not registering** — `nextion-demo.service` shows 0 restarts and a healthy
+  clock, but **no `touch x=…` packets arrive** when the panel is tapped. `sendxy=1` may not
+  stream `0x67` coords on this firmware, or the resistive panel needs a firmer press / the
+  touch ribbon needs a look. Next: a minimal listener that dumps *all* incoming bytes on
+  press to see the real format; or define a real button in a `.tft`.
+- **Bouncing ball not visible** — clock renders but the `cirs` ball (y≈172) doesn't show.
+  `cirs` succeeded in the earlier static demo, so likely a redraw/position issue to chase.
 
-### ⚠ To finish: set the power password on each Pi (one-time, interactive)
-Reboot/Shutdown buttons stay inert until a login is set. Run in your own terminal:
-```
-ssh -t pi@192.168.12.57 "cd ~/pi-monitor && python3 set_power_password.py"
-ssh -t jdburgie@192.168.12.55 "cd ~/pi-monitor && python3 set_power_password.py"
-```
+---
 
-### Open / next ideas
-- Nextion board (`NX4827T043_011`) is wired to the UART (see below) but has **no software
-  yet** — purpose undecided.
-- Clock SPI runs at a conservative **4 MHz**; could try higher for snappier redraws.
-- Dashboard *view* has no auth (fine for LAN); only the power actions are login-gated.
-- **Stability:** .57 dropped off WiFi and rebooted once on 2026-07-23 under load (single-core
-  Zero running clock@1Hz + web server). Services auto-recovered (both enabled). If it
-  recurs, consider a watchdog / lowering clock redraw rate.
-- Not a git repo yet — consider `git init` + push to match the other hardware projects.
+## Todos
+
+- [ ] **Fix Nextion touch** so the 24H/12H button works (no `0x67` packets currently — see
+  Known issues).
+- [ ] **Fix the bouncing-ball** rendering in `nextion_demo_clock.py`.
+- [ ] **Sleep/dim mode for the Nextion** — a button or auto-timeout to dim the display
+  (`dim=<0-100>`), with **wake-on-touch** back to full brightness.
+- [ ] **Set the power password** on each Pi (Reboot/Shutdown buttons inert until then):
+  `ssh -t pi@192.168.12.57 "cd ~/pi-monitor && python3 set_power_password.py"` and
+  `ssh -t jdburgie@192.168.12.55 "cd ~/pi-monitor && python3 set_power_password.py"`
+- [ ] **Solder a 40-pin header** onto the new **Pi Zero 2 W**, then swap the SD card in
+  (quad-core → ends the single-core overload/SSH drops). Same wiring carries over.
+- [ ] Nextion **text/labels** need a font — build a proper `.tft` in Nextion Editor (Windows).
+- [ ] Push this repo to GitHub (github.com/jdburgie) — pending user OK.
+- [ ] Clock SPI at a conservative 4 MHz; could try higher for snappier redraws.
+- [x] Nextion brought up + animated 7-seg clock driven from the Pi
+- [x] Reboot/Shutdown controls behind auth
+- [x] Dashboard cloned to the PiTouch
+- [x] Git repo created
+
+> **Stability note:** .57 (single-core Zero) drops WiFi / reboots under load
+> (clock@1Hz + web server + Nextion demo). Services auto-recover (all enabled). The Zero 2 W
+> swap is the real fix.
 
 ---
 
