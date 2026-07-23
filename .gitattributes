@@ -1,0 +1,4 @@
+# These files run on Linux (the Pi) — keep LF line endings everywhere.
+* text=auto eol=lf
+*.ico binary
+*.png binary
