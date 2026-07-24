@@ -56,8 +56,8 @@ Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, 
 - [ ] Nextion **text/labels** need a font — build a proper `.tft` in Nextion Editor (Windows).
 - [ ] (optional) make the bouncing square a round **ball** — needs the `cirs`-in-loop quirk
   solved, or approximate a circle with `fill` blocks.
-- [ ] Push this repo to GitHub (github.com/jdburgie) — pending user OK.
 - [ ] Clock SPI at a conservative 4 MHz; could try higher for snappier redraws.
+- [x] **Pushed to GitHub** — *private* repo github.com/jdburgie/pi-control-panel (branch `master`)
 - [x] **Pi Zero 2 W swap done** — header soldered, SD moved, stable, IP .57 kept
 - [x] Nextion **touch** working; 24H/12H segmented toggle
 - [x] Nextion **animation** working (bouncing `fill` square)
