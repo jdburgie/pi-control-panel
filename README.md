@@ -29,12 +29,24 @@ Shows Pi health (CPU temp/load/freq, memory, disk, WiFi, under-voltage/throttlin
 ### `nextion/` — Nextion 4.3" display (NX4827T043_011R)
 Scripts to drive a Nextion HMI over UART (`/dev/serial0`, 9600 baud):
 
+- `nextion_demo_clock.py` — **the demo** (service `nextion-demo`): animated 7-segment clock,
+  a bouncing square, a segmented `[ 24 | 12 ]` touch toggle, and sleep-on-idle / wake-on-touch.
+- `nextion_upload.py` — **flash a `.tft` over serial, no SD card** (`whmi-wri` protocol).
 - `nextion_probe.py` — baud-sweep + `connect` handshake (detects the board / `comok`).
 - `nextion_loopback.py` — Pi UART self-test (jumper pin 8 ↔ pin 10).
-- `nextion_cls.py`, `nextion_baudsweep.py` — bring-up color tests.
-- `nextion_demo.py` — static shapes demo (runtime drawing commands, no `.tft`).
-- `nextion_demo_clock.py` — **animated 7-segment clock** with a bouncing ball and a
-  touch button that toggles 24H/12H (raw touch via `sendxy=1`). Service: `nextion-demo`.
+- `nextion_cls.py`, `nextion_baudsweep.py`, `nextion_shapetest.py`, `nextion_ballonly.py`,
+  `nextion_touchdump.py`, `nextion_demo.py` — bring-up / diagnostic helpers.
+
+**Loading a project (`.tft`) without an SD card:** design in **Nextion Editor** (Windows) →
+compile to a `.tft` for this model → `scp` it to the Pi → flash it over the serial link:
+
+```bash
+sudo systemctl stop nextion-demo.service      # free the serial port
+python3 ~/nextion/nextion_upload.py myproject.tft   # streams at 115200, board reboots
+```
+
+> `.HMI` is the *editable Nextion Editor source*; the display only runs the compiled `.tft`.
+> A project must be loaded for the board to answer serial (a blank board is silent).
 
 ### `systemd/` — service units
 `lcd-clock.service`, `pi-monitor.service`, `nextion-demo.service`. Install with:
@@ -48,6 +60,6 @@ sudo systemctl enable --now <name>.service
 (The `pi-monitor` unit on the PiTouch differs only in `User=`/paths.)
 
 ## Hardware
-Raspberry Pi Zero W · Waveshare 1.47" SPI LCD · Nextion NX4827T043 4.3" (480×272) ·
-soon migrating to a **Pi Zero 2 W** (quad-core) to end single-core overload. See
-[`JOURNAL.md`](JOURNAL.md) for the full GPIO/UART wiring tables and SPI/UART config.
+**Raspberry Pi Zero 2 W** (quad-core; swapped in from a Zero W) · Waveshare 1.47" SPI LCD ·
+Nextion NX4827T043 4.3" (480×272). See [`JOURNAL.md`](JOURNAL.md) for the full GPIO/UART
+wiring tables and SPI/UART config.
