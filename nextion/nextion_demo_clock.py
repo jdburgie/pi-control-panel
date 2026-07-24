@@ -6,6 +6,8 @@ the Pi over serial -- no .tft/font needed (digits are drawn from rectangles).
 - bouncing ball animation
 - a segmented pill toggle [ 24 | 12 ]: tap a side to pick 24H/12H; PM dot in 12H
 - raw touch via sendxy=1 (re-asserted periodically); touches logged to stdout
+- sleep after SLEEP_AFTER seconds of no touch (backlight fades to off); any touch
+  wakes it back to full brightness (the wake tap only wakes, it won't toggle)
 """
 import time
 from datetime import datetime
@@ -77,6 +79,8 @@ TG_HALF = TGW // 2
 TG_MID = TGX + TG_HALF                        # x boundary between the two halves
 LDW, LDH, LT = 22, 32, 5                      # toggle label digit size
 
+SLEEP_AFTER = 30          # seconds of no touch before the backlight sleeps
+
 mode12 = False
 
 
@@ -127,11 +131,12 @@ def draw_pm(now):
 buf = bytearray()
 
 
-def poll_touch_press():
-    """Return the x of a press landing inside the toggle this poll, else None."""
+def poll_touch():
+    """Poll raw touch. Returns (any_press, toggle_hit_x_or_None)."""
     n = s.in_waiting
     if n:
         buf.extend(s.read(n))
+    any_press = False
     hit = None
     while len(buf) >= 9:
         if buf[0] == 0x67 and buf[6] == 0xFF and buf[7] == 0xFF and buf[8] == 0xFF:
@@ -140,17 +145,20 @@ def poll_touch_press():
             ev = buf[5]
             del buf[:9]
             print(f"touch x={x} y={y} ev={ev}", flush=True)
-            if ev == 1 and TGX <= x <= TGX + TGW and TGY <= y <= TGY + TGH:
-                hit = x
+            if ev == 1:
+                any_press = True
+                if TGX <= x <= TGX + TGW and TGY <= y <= TGY + TGH:
+                    hit = x
         else:
             del buf[:1]
-    return hit
+    return any_press, hit
 
 
 def main():
     global mode12
     cmd("bkcmd=0")
     cmd("sendxy=1")
+    cmd("dim=100")               # full brightness on start
     time.sleep(0.1)
     s.reset_input_buffer()
     draw_static()
@@ -159,14 +167,44 @@ def main():
     last_sec = -1
     last_toggle = 0.0
     last_sendxy = time.time()
+    last_activity = time.time()
+    asleep = False
     bx, vx, BALLY, BALLR = 24, 9, 166, 14
     last_ball = time.time()
 
     while True:
-        px = poll_touch_press()
-        if px is not None and time.time() - last_toggle > 0.4:
-            last_toggle = time.time()
-            want12 = px >= TG_MID
+        any_press, btn_x = poll_touch()
+        t = time.time()
+        if any_press:
+            last_activity = t
+
+        if t - last_sendxy > 2.0:            # keep raw touch alive (even while asleep)
+            last_sendxy = t
+            cmd("sendxy=1")
+
+        # ---- asleep: dark screen, wait for a touch to wake ----
+        if asleep:
+            if any_press:                    # wake (this tap only wakes; no toggle)
+                asleep = False
+                cmd("dim=100")
+                last_sec = -1                # refresh the clock immediately
+                print("wake", flush=True)
+            time.sleep(0.03)
+            continue
+
+        # ---- go to sleep after inactivity ----
+        if t - last_activity > SLEEP_AFTER:
+            asleep = True
+            print("sleep", flush=True)
+            for d in (70, 45, 22, 0):        # gentle fade to off
+                cmd(f"dim={d}")
+                time.sleep(0.06)
+            continue
+
+        # ---- awake: normal demo ----
+        if btn_x is not None and t - last_toggle > 0.4:
+            last_toggle = t
+            want12 = btn_x >= TG_MID
             if want12 != mode12:
                 mode12 = want12
                 draw_button()
@@ -181,11 +219,6 @@ def main():
                     draw_digit(DX[i], DY, DW, DH, T, val, AMBER)
                     prev[i] = val
             draw_pm(now)
-
-        t = time.time()
-        if t - last_sendxy > 2.0:                    # keep raw touch alive
-            last_sendxy = t
-            cmd("sendxy=1")
 
         if t - last_ball > 0.11:
             last_ball = t

@@ -48,8 +48,6 @@ Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, 
 
 ## Todos
 
-- [ ] **Sleep/dim mode for the Nextion** — a button or auto-timeout to dim the display
-  (`dim=<0-100>`), with **wake-on-touch** back to full brightness.
 - [ ] **Set the power password** on each Pi (Reboot/Shutdown buttons inert until then):
   `ssh -t pi@192.168.12.57 "cd ~/pi-monitor && python3 set_power_password.py"` and
   `ssh -t jdburgie@192.168.12.55 "cd ~/pi-monitor && python3 set_power_password.py"`
@@ -57,6 +55,7 @@ Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, 
 - [ ] (optional) make the bouncing square a round **ball** — needs the `cirs`-in-loop quirk
   solved, or approximate a circle with `fill` blocks.
 - [ ] Clock SPI at a conservative 4 MHz; could try higher for snappier redraws.
+- [x] **Nextion sleep/wake** — backlight fades off after `SLEEP_AFTER`s idle; any touch wakes it
 - [x] **Pushed to GitHub** — *private* repo github.com/jdburgie/pi-control-panel (branch `master`)
 - [x] **Pi Zero 2 W swap done** — header soldered, SD moved, stable, IP .57 kept
 - [x] Nextion **touch** working; 24H/12H segmented toggle
