@@ -1,6 +1,7 @@
 # Pi Control Panel — JOURNAL
 
-Raspberry Pi Zero W v1.1, hostname **RasPi0W**, `192.168.12.57` (user `pi`).
+**Raspberry Pi Zero 2 W** (swapped 2026-07-23 from a Zero W v1.1 for stability), hostname
+**RasPi0W**, `192.168.12.57` (user `pi`).
 Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, a
 **LAN monitoring web dashboard** (also on the PiTouch / Pi 5 at `.55`), and an
 **animated Nextion demo** on a 4.3" serial HMI. Repo: `pi-control-panel`.
@@ -27,40 +28,48 @@ Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, 
 - Fixed the SSH key ACL on Windows (owner-only) and disabled WiFi powersave on both Pis.
 - **Created this git repo** (`pi-control-panel`) and pulled all running files into it.
 
-### Known issues (this session)
-- **Nextion touch not registering** — `nextion-demo.service` shows 0 restarts and a healthy
-  clock, but **no `touch x=…` packets arrive** when the panel is tapped. `sendxy=1` may not
-  stream `0x67` coords on this firmware, or the resistive panel needs a firmer press / the
-  touch ribbon needs a look. Next: a minimal listener that dumps *all* incoming bytes on
-  press to see the real format; or define a real button in a `.tft`.
-- **Bouncing ball not visible** — clock renders but the `cirs` ball (y≈172) doesn't show.
-  `cirs` succeeded in the earlier static demo, so likely a redraw/position issue to chase.
+### 2026-07-23 (later) — Nextion demo finished + Pi Zero 2 W swap
+- **Nextion touch fixed.** `sendxy=1` *does* stream `0x67` packets (proved with
+  `nextion_touchdump.py`) — the demo just wasn't keeping it asserted. Fix: **re-send
+  `sendxy=1` every ~2s** in the loop + `flush()` each write. The 24H/12H toggle now works;
+  touches log as `touch x=… y=… ev=…`.
+- **Button redesigned** as a proper **segmented pill toggle** `[ 24 | 12 ]` (rounded via
+  `fill`+`cirs`, active half amber) — tap a side to select. Tap-left→24H, tap-right→12H.
+- **Animation fixed** — turns out **`cirs` (filled circle) does NOT render inside the fast
+  redraw loop** on this board (works standalone + for the toggle's caps, but not repeated
+  rapidly). Switched the "ball" to a **`fill` square** (rock-solid primitive); it bounces
+  reliably. Round ball is a TODO if we ever want it (would need to chase the `cirs` quirk).
+- **Swapped to the Pi Zero 2 W** (quad-core). Same SD/wiring; **kept IP .57**, hostname
+  `RasPi0W`; all three services auto-started; **load ~1.8 vs ~7** — the SSH-drop/reboot
+  instability is gone. (Note: the "nothing renders" ball tests on the old board were partly
+  its overloaded CPU corrupting serial mid-write.)
 
 ---
 
 ## Todos
 
-- [ ] **Fix Nextion touch** so the 24H/12H button works (no `0x67` packets currently — see
-  Known issues).
-- [ ] **Fix the bouncing-ball** rendering in `nextion_demo_clock.py`.
 - [ ] **Sleep/dim mode for the Nextion** — a button or auto-timeout to dim the display
   (`dim=<0-100>`), with **wake-on-touch** back to full brightness.
 - [ ] **Set the power password** on each Pi (Reboot/Shutdown buttons inert until then):
   `ssh -t pi@192.168.12.57 "cd ~/pi-monitor && python3 set_power_password.py"` and
   `ssh -t jdburgie@192.168.12.55 "cd ~/pi-monitor && python3 set_power_password.py"`
-- [ ] **Solder a 40-pin header** onto the new **Pi Zero 2 W**, then swap the SD card in
-  (quad-core → ends the single-core overload/SSH drops). Same wiring carries over.
 - [ ] Nextion **text/labels** need a font — build a proper `.tft` in Nextion Editor (Windows).
+- [ ] (optional) make the bouncing square a round **ball** — needs the `cirs`-in-loop quirk
+  solved, or approximate a circle with `fill` blocks.
 - [ ] Push this repo to GitHub (github.com/jdburgie) — pending user OK.
 - [ ] Clock SPI at a conservative 4 MHz; could try higher for snappier redraws.
+- [x] **Pi Zero 2 W swap done** — header soldered, SD moved, stable, IP .57 kept
+- [x] Nextion **touch** working; 24H/12H segmented toggle
+- [x] Nextion **animation** working (bouncing `fill` square)
 - [x] Nextion brought up + animated 7-seg clock driven from the Pi
 - [x] Reboot/Shutdown controls behind auth
 - [x] Dashboard cloned to the PiTouch
 - [x] Git repo created
 
-> **Stability note:** .57 (single-core Zero) drops WiFi / reboots under load
-> (clock@1Hz + web server + Nextion demo). Services auto-recover (all enabled). The Zero 2 W
-> swap is the real fix.
+> **Nextion quirks (this board, driving from the Pi with runtime commands):** needs a project
+> loaded to answer serial (blank = silent); `sendxy=1` for raw touch but must be re-asserted;
+> `xstr` text needs a font in the loaded project; **`cirs` won't render in a fast loop** —
+> use `fill`. GND must be solid or both serial directions die.
 
 ---
 
