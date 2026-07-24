@@ -69,6 +69,14 @@ Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, 
 > loaded to answer serial (blank = silent); `sendxy=1` for raw touch but must be re-asserted;
 > `xstr` text needs a font in the loaded project; **`cirs` won't render in a fast loop** —
 > use `fill`. GND must be solid or both serial directions die.
+>
+> **This board does NOT support serial `.tft` upload.** `whmi-wri`/`whmi-wris` both return
+> `00 FF FF FF` ("invalid instruction") — confirmed at 9600 and 115200. It supports the
+> *runtime* serial protocol (drawing/touch) but firmware upload is **SD-card only** (FAT32,
+> power-cycle to auto-flash). `nextion_upload.py` is kept for boards that *do* support serial
+> upload (it auto-picks whmi-wri vs whmi-wris by the DNxE header). Also: this older bootloader
+> needs the **classic** TFT format — Nextion Editor's newer **DNxE (v1.2)** output is rejected;
+> compile with an older Editor.
 
 ---
 

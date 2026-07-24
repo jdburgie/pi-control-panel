@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Upload a Nextion .tft to the display over the Pi's serial link -- no SD card.
 
-Implements the classic Nextion `whmi-wri` upload protocol:
-  connect -> comok, then `whmi-wri <size>,<baud>,0`, switch to <baud>, wait for
-  0x05, stream the file in 4096-byte chunks (0x05 ack after each), device reboots.
+Auto-detects the TFT format and uses the matching upload protocol:
+  - newer `DNxE` files -> v1.2 (`whmi-wris`, handles the 0x08 skip-offset acks)
+  - classic files      -> v1.0 (`whmi-wri`, plain 0x05 acks)
+Flow: connect -> comok, send the upload command, switch to <baud>, wait for 0x05,
+stream the file in 4096-byte chunks, device reboots into the new project.
 
 Requirements:
   - a project must already be loaded on the display (a blank board won't answer serial)
@@ -63,31 +65,42 @@ def main():
     else:
         print("! no comok reply -- is a project loaded? trying the upload anyway...")
 
-    # begin transfer (send command at current baud, THEN switch baud)
+    data = open(path, "rb").read()
+    v12 = b"DNxE" in data[:16]        # newer TFT format -> v1.2 upload protocol
+    cmd = "whmi-wris" if v12 else "whmi-wri"
+    flag = 1 if v12 else 0
+    print(f"protocol: {'v1.2 (whmi-wris)' if v12 else 'v1.0 (whmi-wri)'}")
+
+    # send the upload command at the current baud, THEN switch baud
     s.reset_input_buffer()
-    s.write(TERM + f"whmi-wri {size},{up_baud},0".encode() + TERM)
+    s.write(TERM + f"{cmd} {size},{up_baud},{flag}".encode() + TERM)
     s.flush()
     time.sleep(0.1)
     s.baudrate = up_baud
     time.sleep(0.2)
 
-    if read_byte(s, 2) != b"\x05":
-        sys.exit("device did not become ready (no 0x05 after whmi-wri). "
-                 "Check the model/baud and that a project is loaded.")
+    if read_byte(s, 3) != b"\x05":
+        sys.exit("device did not become ready (no 0x05). The bootloader may not "
+                 "support this .tft format, or the model/baud is wrong.")
 
-    sent = 0
-    with open(path, "rb") as f:
-        while True:
-            chunk = f.read(CHUNK)
-            if not chunk:
-                break
-            s.write(chunk)
-            s.flush()
-            sent += len(chunk)
-            ack = read_byte(s, 8)
-            if ack != b"\x05":
-                sys.exit(f"\nno ack (0x05) after {sent}/{size} bytes (got {ack!r})")
-            print(f"\r  {sent}/{size}  ({100 * sent // size}%)", end="", flush=True)
+    pos = 0
+    while pos < size:
+        chunk = data[pos:pos + CHUNK]
+        s.write(chunk)
+        s.flush()
+        pos += len(chunk)
+        resp = read_byte(s, 10)
+        if resp == b"\x05":
+            pass                                  # send next block
+        elif resp == b"\x08":                     # v1.2 skip: seek to given offset
+            off = s.read(4)
+            if len(off) == 4:
+                skip = int.from_bytes(off, "little")
+                if skip:
+                    pos = skip
+        else:
+            sys.exit(f"\nno ack after {pos}/{size} bytes (got {resp!r})")
+        print(f"\r  {pos}/{size}  ({100 * pos // size}%)", end="", flush=True)
 
     print("\ndone -- the Nextion reboots into the new project.")
     s.close()
