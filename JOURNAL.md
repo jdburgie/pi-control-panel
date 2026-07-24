@@ -44,6 +44,27 @@ Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, 
   instability is gone. (Note: the "nothing renders" ball tests on the old board were partly
   its overloaded CPU corrupting serial mid-write.)
 
+### 2026-07-24 — Real fonts via a flashed `.tft` + touch recalibration
+- **Custom `.tft` flashed** (`pi-dashboard.tft`, built in Nextion Editor with two generated
+  fonts). **This board is SD-flash-only** — serial upload is rejected outright (see the quirks
+  note below), and the older bootloader needs the **classic** TFT format, not the newer `DNxE`.
+  Flashing gotcha: a **2 GB card formatted FAT16 silently does nothing** — the board just sits
+  on "SD Card Update…". Reformatting as **FAT32** made it flash immediately.
+- **Demo rewritten to use real fonts** — the 7-segment digits-from-rectangles hack is gone.
+  Now `xstr` draws a real clock (font 1, large), date, title bar, `AM/PM`, and `24H`/`12H`
+  toggle labels (font 0). Verified with `nextion_fonttest.py` (both fonts ack `0x01`).
+- **Touch broke after reflash → fixed with `touch_j`.** Post-flash, every touch reported
+  **`x=0, y=0`** (both the `sendxy` stream *and* the `tch0`/`tch1` registers), while press/
+  release events still arrived correctly and `comok` still reported touch-capable. That
+  press-detected-but-zero-coords signature = **missing touch calibration**, not a wiring fault.
+  **`touch_j`** is the Nextion instruction that runs the on-screen crosshair calibration
+  (acks `0x01`); tapping the targets restored full-range coordinates (x 37–466, y 32–260).
+  Because calibration is done against the *displayed* frame, no coordinate flipping is needed
+  in code afterwards. ⚠ **`cal` is NOT a Nextion command** — it is silently ignored, and that
+  silence is easy to misread as a hardware failure. Use `touch_j`.
+- **Display direction** ended at **0°** in the Editor (upright for this mount). Re-running
+  `touch_j` is required after any direction change.
+
 ---
 
 ## Todos
@@ -51,10 +72,14 @@ Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, 
 - [ ] **Set the power password** on each Pi (Reboot/Shutdown buttons inert until then):
   `ssh -t pi@192.168.12.57 "cd ~/pi-monitor && python3 set_power_password.py"` and
   `ssh -t jdburgie@192.168.12.55 "cd ~/pi-monitor && python3 set_power_password.py"`
-- [ ] Nextion **text/labels** need a font — build a proper `.tft` in Nextion Editor (Windows).
 - [ ] (optional) make the bouncing square a round **ball** — needs the `cirs`-in-loop quirk
-  solved, or approximate a circle with `fill` blocks.
+  solved, or approximate a circle with `fill` blocks. (A ball *image* in the `.tft` drawn with
+  `pic` would also work now that we can flash projects.)
+- [ ] (optional) move more of the UI into the `.tft` as real components (`t0.txt=…`,
+  `n0.val=…`) instead of runtime drawing.
 - [ ] Clock SPI at a conservative 4 MHz; could try higher for snappier redraws.
+- [x] **Nextion real text/labels** — custom `.tft` with fonts flashed via SD; demo uses `xstr`
+- [x] **Touch recalibrated** after reflash via `touch_j`
 - [x] **Nextion sleep/wake** — backlight fades off after `SLEEP_AFTER`s idle; any touch wakes it
 - [x] **Pushed to GitHub** — *private* repo github.com/jdburgie/pi-control-panel (branch `master`)
 - [x] **Pi Zero 2 W swap done** — header soldered, SD moved, stable, IP .57 kept
@@ -68,7 +93,8 @@ Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, 
 > **Nextion quirks (this board, driving from the Pi with runtime commands):** needs a project
 > loaded to answer serial (blank = silent); `sendxy=1` for raw touch but must be re-asserted;
 > `xstr` text needs a font in the loaded project; **`cirs` won't render in a fast loop** —
-> use `fill`. GND must be solid or both serial directions die.
+> use `fill`. GND must be solid or both serial directions die. **After flashing a new `.tft`
+> (or changing display direction), run `touch_j` to recalibrate** or touch reports `0,0`.
 >
 > **This board does NOT support serial `.tft` upload.** `whmi-wri`/`whmi-wris` both return
 > `00 FF FF FF` ("invalid instruction") — confirmed at 9600 and 115200. It supports the
