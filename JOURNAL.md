@@ -65,6 +65,28 @@ Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, 
 - **Display direction** ended at **0°** in the Editor (upright for this mount). Re-running
   `touch_j` is required after any direction change.
 
+### 2026-07-24 (later) — Sprinkler control panel started
+- **Yes, the Nextion does multiple pages** — two ways: native `.tft` pages (switch with
+  `page N`, components send their own events) or software-drawn views on one page. Built the
+  software version first (`sprinkler-panel/sprinkler_panel.py`): STATUS / ZONES / RUN /
+  CONFIRM / PROGRAM / RAIN, status polled on a background thread so touch never blocks on
+  HTTP, sleep/wake kept. Confirmed working (touch → correct buttons) but the hand-computed
+  layout needed too much tweaking, so **switching to a native `.tft` laid out in the Editor**.
+- **Sprinkler API mapped** (controller `192.168.12.52`, "Garden Sprinkler", fw 0.5, 9 named
+  zones): `GET /api/status` + `/api/config`; `POST /api/manual/start`
+  `{zone:1-9,durationMinutes:1-59,ignoreRain}`, `/api/manual/stop`, `/api/queue/clear`,
+  `/api/program/start {program:"A"|"B"}`, `/api/rain-delay {hours:0-240}`.
+  ⚠ **The controller has no PIN set**, and the firmware short-circuits auth entirely when the
+  PIN is empty (`if (g_pin.length()==0) return true;`) — so the whole API is open to anything
+  on the LAN. If a PIN is ever set, the panel needs a `/api/login` session cookie.
+- Wrote **`HMI_SPEC.md`** (the contract for the Editor layout: page/component names, and the
+  gotchas — tick *Send Component ID*, raise *Max. Text Size*, **Pi owns navigation** so no
+  page-changes in Editor events, re-run `touch_j` after flashing) and **`discover_ids.py`**,
+  which steps through the pages and records `(page,id) → name` by tapping, so ~30 component
+  ids never have to be transcribed by hand.
+- Development is **dry-run**: `sprinkler_panel.py --no-actuate` logs POSTs instead of sending
+  them. No valve has been opened from here; ask before any live actuation test.
+
 ---
 
 ## Todos
@@ -77,6 +99,12 @@ Three jobs run as systemd services: an **analog clock** on a Waveshare SPI LCD, 
   `pic` would also work now that we can flash projects.)
 - [ ] (optional) move more of the UI into the `.tft` as real components (`t0.txt=…`,
   `n0.val=…`) instead of runtime drawing.
+- [ ] **Sprinkler panel — lay out the `.tft` in Nextion Editor** per `sprinkler-panel/HMI_SPEC.md`,
+  flash via SD, run `touch_j`, then `discover_ids.py`; then port the driver to components.
+- [ ] Decide how the sprinkler panel and the clock demo share the display (systemd
+  `Conflicts=`, or fold the clock in as a view) — only one process can own `/dev/serial0`.
+- [ ] Consider setting a **PIN on the sprinkler controller** (API is currently open on the LAN);
+  the panel would then need `/api/login` session support.
 - [ ] Clock SPI at a conservative 4 MHz; could try higher for snappier redraws.
 - [x] **Nextion real text/labels** — custom `.tft` with fonts flashed via SD; demo uses `xstr`
 - [x] **Touch recalibrated** after reflash via `touch_j`
